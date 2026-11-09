@@ -1,0 +1,48 @@
+#!/bin/sh
+# Builds Brim on the Mac (`ssh mac`, which has Xcode and the signing team) and installs it on the iPhone the Mac reaches.
+# The signing key sits in the Mac's login keychain, which opens only in the login session, never over ssh, so the build
+# runs there as a one-off launch agent.
+# Usage: scripts/phone [device]   (device: a UDID or name; default: the first physical iPhone the Mac reaches)
+set -e
+cd "$(dirname "$0")/.."
+rsync -a --delete --exclude .git --exclude build ./ mac:Developer/brim-build/
+ssh mac sh -s "${1:-}" <<'MAC'
+set -e
+cd ~/Developer/brim-build
+phone=$1
+if [ -z "$phone" ]; then
+  xcrun devicectl list devices --json-output /tmp/brim-devices.json >/dev/null
+  phone=$(/usr/bin/python3 -c "
+import json
+for d in json.load(open('/tmp/brim-devices.json'))['result']['devices']:
+    h, c = d['hardwareProperties'], d['connectionProperties']
+    if h.get('deviceType') == 'iPhone' and h.get('reality') == 'physical' and c.get('transportType'): print(h['udid']); break")
+fi
+[ -n "$phone" ] || { echo "the Mac doesn't reach an iPhone" >&2; exit 1; }
+/opt/homebrew/bin/xcodegen generate -q
+label=dev.brim.build
+cat > build.sh <<'RUN'
+#!/bin/sh
+cd "$HOME/Developer/brim-build"
+xcodebuild build -project Brim.xcodeproj -scheme Brim -destination generic/platform=iOS -configuration Release \
+  -derivedDataPath build -allowProvisioningUpdates -quiet > build.log 2>&1
+echo $? > build.status
+RUN
+chmod +x build.sh
+rm -f build.status
+cat > build.plist <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>$label</string>
+<key>ProgramArguments</key><array><string>$PWD/build.sh</string></array>
+<key>RunAtLoad</key><true/>
+</dict></plist>
+PLIST
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" build.plist
+until [ -f build.status ]; do sleep 2; done
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+[ "$(cat build.status)" = 0 ] || { tail -20 build.log >&2; exit 1; }
+xcrun devicectl device install app --device "$phone" build/Build/Products/Release-iphoneos/Brim.app
+MAC

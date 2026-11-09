@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Brim",
+  "version": "0.1.0",
+  "description": "Runs web pages under Safari's button column on the iPhone Duo's front screen, without hiding anything you read or tap.",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

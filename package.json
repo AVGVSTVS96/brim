@@ -1,0 +1,16 @@
+{
+  "name": "brim",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "lint": "oxlint",
+    "fmt": "oxfmt",
+    "check": "oxlint && oxfmt --check"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.92.0",
+    "oxfmt": "^0.77.0",
+    "oxlint": "1.92.0"
+  }
+}

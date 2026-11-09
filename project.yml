@@ -1,0 +1,44 @@
+name: Brim
+options:
+  bundleIdPrefix: com.shahidy
+  deploymentTarget:
+    iOS: "27.0"
+settings:
+  base:
+    SDKROOT: iphoneos
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: YES
+    DEVELOPMENT_TEAM: 6SV62PQ76B
+    CODE_SIGN_STYLE: Automatic
+targets:
+  Brim:
+    type: application
+    platform: iOS
+    sources: [App]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shahidy.brim
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Brim
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+    dependencies:
+      - target: Extension
+  Extension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Extension
+        excludes: [Resources]
+      - path: Extension/Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shahidy.brim.extension
+        PRODUCT_MODULE_NAME: BrimExtension
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_FILE: Extension/Info.plist
+        GENERATE_INFOPLIST_FILE: NO

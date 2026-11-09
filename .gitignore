@@ -1,0 +1,7 @@
+*.xcodeproj
+build/
+build.sh
+build.plist
+build.log
+build.status
+node_modules
