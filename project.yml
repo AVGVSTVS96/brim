@@ -7,7 +7,8 @@ settings:
   base:
     SDKROOT: iphoneos
     SWIFT_VERSION: "6.0"
-    MARKETING_VERSION: "0.1.0"
+    APP_NAME: Span
+    MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     GENERATE_INFOPLIST_FILE: YES
     DEVELOPMENT_TEAM: 6SV62PQ76B
@@ -22,7 +23,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.shahidy.brim
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Brim
+        INFOPLIST_KEY_CFBundleDisplayName: $(APP_NAME)
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
     dependencies:

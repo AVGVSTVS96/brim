@@ -1,8 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Brim",
-  "version": "0.1.0",
-  "description": "Runs web pages under Safari's button column on the iPhone Duo's front screen, without hiding anything you read or tap.",
+  "name": "Span",
+  "version": "1.0.0",
+  "description": "Lays web pages out across the whole front screen of iPhone Duo, keeping text and buttons clear of Safari's column.",
+  "icons": {
+    "48": "images/icon-48.png",
+    "96": "images/icon-96.png",
+    "128": "images/icon-128.png",
+    "256": "images/icon-256.png",
+    "512": "images/icon-512.png"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
