@@ -1,0 +1,17 @@
+{
+  "duo": {
+    "w": 1398,
+    "h": 2034,
+    "type": "APP_IPHONE_DUO"
+  },
+  "iphone-6.9": {
+    "w": 1320,
+    "h": 2868,
+    "type": "APP_IPHONE_67"
+  },
+  "iphone-6.3": {
+    "w": 1206,
+    "h": 2622,
+    "type": "APP_IPHONE_61"
+  }
+}
