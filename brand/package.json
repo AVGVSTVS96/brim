@@ -1,0 +1,13 @@
+{
+  "name": "span-brand",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "logo": "bun logo/gen.ts",
+    "store": "bun store/gen.ts",
+    "upload": "bun store/upload.ts"
+  },
+  "dependencies": {
+    "opentype.js": "^2.0.0"
+  }
+}
