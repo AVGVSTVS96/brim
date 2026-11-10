@@ -7,15 +7,17 @@ final class Checks: XCTestCase {
     let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
 
     // On a simulator Brim starts switched off, as on a phone; this turns it on in Settings.
-    func testTurnOn() throws {
+    func testAllow() throws {
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         XCUIApplication().launch() // Safari lists an app's extension once the app has run
         settings.launch()
         for label in ["Apps", "Safari", "Extensions", "Brim"] {
             open(settings, label)
         }
-        let allow = settings.switches.firstMatch
+        // On the Duo's front screen Settings keeps its sidebar, with Airplane Mode's switch, beside the page.
+        let allow = settings.switches.matching(NSPredicate(format: "label CONTAINS 'Allow'")).firstMatch
         XCTAssert(allow.waitForExistence(timeout: 5))
+        attach(settings, "found")
         if allow.value as? String == "0" { allow.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap() }
         attach(settings, "allowed")
         open(settings, "All Websites")
@@ -23,11 +25,15 @@ final class Checks: XCTestCase {
         attach(settings, "settings")
     }
 
+    // Lists load as they scroll, and on the Duo's front screen the sidebar and the page scroll apart, so each is tried.
     private func open(_ app: XCUIApplication, _ label: String) {
         let item = app.staticTexts[label].firstMatch
         _ = item.waitForExistence(timeout: 5)
-        for _ in 0..<8 where !item.isHittable {
-            app.swipeUp()
+        for _ in 0..<30 where !(item.exists && item.isHittable) {
+            for list in app.collectionViews.allElementsBoundByIndex + app.tables.allElementsBoundByIndex
+            where list.isHittable && !(item.exists && item.isHittable) {
+                list.swipeUp()
+            }
         }
         item.tap()
     }

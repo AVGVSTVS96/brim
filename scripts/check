@@ -1,6 +1,7 @@
 #!/bin/sh
 # Opens pages in Safari on an iPhone Duo with Brim and copies a screenshot of each here, to shots/ (Checks/Checks.swift).
-# Usage: scripts/check <device> [test] [url...]   device: a simulator or iPhone UDID the Mac reaches; test: TurnOn or Pages
+# Usage: scripts/check <device> [tests] [url...]   device: a simulator or iPhone UDID the Mac reaches; tests: Allow, Pages
+# or both (Allow,Pages), run in one go so a phone asks for Touch ID once
 set -e
 cd "$(dirname "$0")/.."
 device=$1 test=${2:-Pages}
@@ -18,7 +19,7 @@ scripts/gui xcodebuild build-for-testing -project Brim.xcodeproj -scheme Brim -d
 if xcrun simctl list devices | grep -q "$1"; then xcrun simctl install "$1" build/Build/Products/Debug-iphonesimulator/Brim.app
 else xcrun devicectl device install app --device "$1" build/Build/Products/Debug-iphoneos/Brim.app >/dev/null; fi
 TEST_RUNNER_BRIM_URLS=$3 xcodebuild test-without-building -project Brim.xcodeproj -scheme Brim -destination "id=$1" \
-  -derivedDataPath build -resultBundlePath build/check.xcresult -only-testing:Checks/Checks/test$2 -quiet 2>&1 |
+  -derivedDataPath build -resultBundlePath build/check.xcresult $(for t in $(echo "$2" | tr , " "); do echo -only-testing:Checks/Checks/test$t; done) -quiet 2>&1 |
   grep -E "error:|failed|TEST" | cut -c1-200 | tail -15 || true
 xcrun xcresulttool export attachments --path build/check.xcresult --output-path build/shots >/dev/null
 MAC
