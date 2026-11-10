@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Span",
   "version": "1.0.0",
-  "description": "Lays web pages out across the whole front screen of iPhone Duo, keeping text and buttons clear of Safari's column.",
+  "description": "Full-width web pages on the iPhone Duo's front screen, with text and buttons kept clear of Safari's column.",
   "icons": {
     "48": "icon-48.png",
     "96": "icon-96.png",
