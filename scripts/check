@@ -10,15 +10,10 @@ urls=$(echo "$*" | tr " " ",")
 ssh mac sh -s "$device" "$test" "'$urls'" <<'MAC'
 set -e
 cd ~/Developer/brim-build
-/opt/homebrew/bin/xcodegen generate -q
-# Safari keeps running an extension's old scripts until its version changes, so each build gets its own.
-build=$(( ($(date +%s) - 1794000000) / 60 ))
-/usr/bin/sed -i '' "s/\"version\": \"\([0-9]*\.[0-9]*\)\.[0-9]*\"/\"version\": \"\1.$build\"/" Extension/Resources/manifest.json
-/usr/bin/sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: \"$build\"/" project.yml
-/opt/homebrew/bin/xcodegen generate -q
+scripts/version >/dev/null
 rm -rf build/check.xcresult build/shots
-xcodebuild build-for-testing -project Brim.xcodeproj -scheme Brim -destination "id=$1" -derivedDataPath build \
-  -allowProvisioningUpdates -quiet 2>&1 | grep -E "error:" | cut -c1-200 || true
+scripts/gui xcodebuild build-for-testing -project Brim.xcodeproj -scheme Brim -destination "id=$1" -derivedDataPath build \
+  -allowProvisioningUpdates -quiet | grep -E "error:" | cut -c1-200 || true
 # The test run leaves an older Brim in place, so the new one is installed first.
 if xcrun simctl list devices | grep -q "$1"; then xcrun simctl install "$1" build/Build/Products/Debug-iphonesimulator/Brim.app
 else xcrun devicectl device install app --device "$1" build/Build/Products/Debug-iphoneos/Brim.app >/dev/null; fi

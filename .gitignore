@@ -1,8 +1,8 @@
 *.xcodeproj
 build/
-build.sh
-build.plist
-build.log
-build.status
 node_modules
 shots
+gui.sh
+gui.plist
+gui.log
+gui.status

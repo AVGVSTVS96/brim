@@ -1,0 +1,10 @@
+#!/bin/sh
+# Runs on the Mac before a build: gives the build its own number and makes the Xcode project. Safari keeps running an
+# extension's old scripts until its version changes, so every build needs a new one.
+set -e
+cd "$(dirname "$0")/.."
+build=$(( ($(date +%s) - 1794000000) / 60 ))
+/usr/bin/sed -i '' "s/\"version\": \"\([0-9]*\.[0-9]*\)\.[0-9]*\"/\"version\": \"\1.$build\"/" Extension/Resources/manifest.json
+/usr/bin/sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: \"$build\"/" project.yml
+/opt/homebrew/bin/xcodegen generate -q
+echo "$build"

@@ -1,0 +1,25 @@
+#!/bin/sh
+# Runs on the Mac: gui <command…> runs a command in the login session as a one-off launch agent, waits for it, and
+# prints its output. The signing key sits in the login keychain, which opens there and never over ssh.
+set -e
+cd "$(dirname "$0")/.."
+label=dev.brim.gui
+rm -f gui.status
+printf '#!/bin/sh\ncd "%s"\n"$@" > gui.log 2>&1\necho $? > gui.status\n' "$PWD" > gui.sh
+chmod +x gui.sh
+args=$(for a in "$PWD/gui.sh" "$@"; do printf '<string>%s</string>' "$(printf '%s' "$a" | sed 's/&/\&amp;/g; s/</\&lt;/g')"; done)
+cat > gui.plist <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>$label</string>
+<key>ProgramArguments</key><array>$args</array>
+<key>RunAtLoad</key><true/>
+</dict></plist>
+PLIST
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" gui.plist
+until [ -f gui.status ]; do sleep 2; done
+launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+cat gui.log
+exit "$(cat gui.status)"
