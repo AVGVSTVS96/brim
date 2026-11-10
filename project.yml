@@ -42,3 +42,21 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_FILE: Extension/Info.plist
         GENERATE_INFOPLIST_FILE: NO
+  Checks:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Checks]
+    dependencies:
+      - target: Brim
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shahidy.brim.checks
+        TEST_TARGET_NAME: Brim
+        TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  Brim:
+    build:
+      targets:
+        Brim: all
+    test:
+      targets: [Checks]

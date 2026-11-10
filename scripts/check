@@ -1,0 +1,35 @@
+#!/bin/sh
+# Opens pages in Safari on an iPhone Duo with Brim and copies a screenshot of each here, to shots/ (Checks/Checks.swift).
+# Usage: scripts/check <device> [test] [url...]   device: a simulator or iPhone UDID the Mac reaches; test: TurnOn or Pages
+set -e
+cd "$(dirname "$0")/.."
+device=$1 test=${2:-Pages}
+shift 2 || shift $#
+rsync -a --delete --exclude .git --exclude build --exclude shots --exclude node_modules ./ mac:Developer/brim-build/
+urls=$(echo "$*" | tr " " ",")
+ssh mac sh -s "$device" "$test" "'$urls'" <<'MAC'
+set -e
+cd ~/Developer/brim-build
+/opt/homebrew/bin/xcodegen generate -q
+# Safari keeps running an extension's old scripts until its version changes, so each build gets its own.
+build=$(( ($(date +%s) - 1794000000) / 60 ))
+/usr/bin/sed -i '' "s/\"version\": \"\([0-9]*\.[0-9]*\)\.[0-9]*\"/\"version\": \"\1.$build\"/" Extension/Resources/manifest.json
+/usr/bin/sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: \"$build\"/" project.yml
+/opt/homebrew/bin/xcodegen generate -q
+rm -rf build/check.xcresult build/shots
+xcodebuild build-for-testing -project Brim.xcodeproj -scheme Brim -destination "id=$1" -derivedDataPath build \
+  -allowProvisioningUpdates -quiet 2>&1 | grep -E "error:" | cut -c1-200 || true
+# The test run leaves an older Brim in place, so the new one is installed first.
+if xcrun simctl list devices | grep -q "$1"; then xcrun simctl install "$1" build/Build/Products/Debug-iphonesimulator/Brim.app
+else xcrun devicectl device install app --device "$1" build/Build/Products/Debug-iphoneos/Brim.app >/dev/null; fi
+TEST_RUNNER_BRIM_URLS=$3 xcodebuild test-without-building -project Brim.xcodeproj -scheme Brim -destination "id=$1" \
+  -derivedDataPath build -resultBundlePath build/check.xcresult -only-testing:Checks/Checks/test$2 -quiet 2>&1 |
+  grep -E "error:|failed|TEST" | cut -c1-200 | tail -15 || true
+xcrun xcresulttool export attachments --path build/check.xcresult --output-path build/shots >/dev/null
+MAC
+mkdir -p shots
+rsync -a mac:Developer/brim-build/build/shots/ shots/
+cd shots
+jq -r '.[].attachments[] | select(.exportedFileName | endswith(".png")) | "\(.exportedFileName) \(.suggestedHumanReadableName | sub("_0_[0-9A-F-]+"; ""))"' manifest.json |
+  while read -r file name; do mv "$file" "${name%.png}.png"; done
+ls ./*.png
