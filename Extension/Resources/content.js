@@ -16,39 +16,44 @@ const style = document.createElement("style");
 
 // The page is wider than the part Safari counts as shown, so a sideways drag would slide it under the column. Every
 // box takes only drags up and down and pinches, as a page's own setting doesn't say otherwise (WebKit starts afresh in
-// each box that scrolls, so the root alone isn't enough), except rows that scroll sideways and what's in them.
+// each box that scrolls, so the root alone isn't enough), except rows that scroll sideways and what's in them, which
+// keep a sideways drag to themselves rather than pass it on to the page at their ends.
 style.textContent = `:where(html[data-brim],html[data-brim] *){touch-action:pan-y pinch-zoom}
 :where(html[data-brim] [data-brim-row],html[data-brim] [data-brim-row] *){touch-action:auto}
+html[data-brim] [data-brim-row]{overscroll-behavior-x:contain}
 html[data-brim]{overscroll-behavior-x:none!important}
 html[data-brim]::-webkit-scrollbar:horizontal{display:none}`;
 
-let meta; // the page's viewport tag
-let own = ""; // what the page itself asked of it
-let wrote = ""; // what Brim last put in it
+let tags = []; // the page's viewport tags
+let phone = false; // the page is laid out for phones (device-width)
 let full = 0; // the screen's width while Brim widens the page, else 0
 
 const extra = (width) => `, width=${width}, height=device-height, initial-scale=1, minimum-scale=1`;
 const EXTRA = new RegExp(extra("\\d+"), "g");
 
+// What the page itself asked of a tag, and what Brim puts in it. Some pages (Amazon) write back what they read,
+// Brim's settings included, which Brim takes off again rather than adding to.
+const own = (tag) => tag.content.replace(EXTRA, "");
+const want = (tag) => own(tag) + (full ? extra(full) : "");
+
 // The screen's width when Safari has its column on the right, else 0. On its side with the camera on the left
 // (landscape-primary) the column is on the left, and Brim leaves the page as Safari lays it out.
-// The visible width is checked rather than the screen's, which Private Browsing reports made up.
+// The visible width is checked rather than the screen's, which Private Browsing reports made up. A page widened after
+// Safari has already fitted it to the column can keep reporting that scale (0.82) while shown unzoomed, so the visible
+// width unscaled counts too.
 function wide() {
   if (screen.orientation.type === "landscape-primary") return 0;
+  const shown = visualViewport.width;
 
-  return SCREENS[Math.round(visualViewport.width * visualViewport.scale)] ?? 0;
+  return SCREENS[Math.round(shown * visualViewport.scale)] ?? SCREENS[Math.round(shown)] ?? 0;
 }
 
 // The viewport tag decides the layout's width before anything is laid out, and Brim's settings come last, so they
-// win over the page's own. Only pages laid out for phones (device-width) are widened.
+// win over the page's own.
 function widen() {
-  full = meta ? wide() : 0;
+  full = phone ? wide() : 0;
 
-  if (meta) {
-    wrote = full ? own + extra(full) : own;
-
-    if (meta.content !== wrote) meta.content = wrote;
-  }
+  for (const tag of tags) if (tag.content !== want(tag)) tag.content = want(tag);
 
   root.toggleAttribute("data-brim", Boolean(full));
 
@@ -57,14 +62,15 @@ function widen() {
   later(0);
 }
 
-// Pages that set their viewport tag again from script (Next.js and others do) get it widened again. Some (Amazon)
-// write back what they read, Brim's settings included, which Brim takes off again rather than adding to.
+// Pages that set their viewport tag again from script get it widened again. Safari goes by the tag it read last, and
+// some pages (Next.js) add a second one after their first, so every tag carries Brim's settings and the newest says
+// whether the page is laid out for phones.
 function adopt() {
-  const found = document.querySelector('meta[name="viewport"]');
+  const found = [...document.querySelectorAll('meta[name="viewport"]')];
 
-  if (!found || (found === meta && found.content === wrote)) return;
-  own = found.content.replace(EXTRA, "");
-  meta = /device-width/.test(own) ? found : undefined;
+  if (found.length === tags.length && found.every((tag, i) => tag === tags[i] && tag.content === want(tag))) return;
+  tags = found;
+  phone = tags.length > 0 && /device-width/.test(own(tags.at(-1)));
   widen();
 }
 
@@ -87,12 +93,14 @@ function undo() {
   changes = [];
 }
 
+// The page is laid out the full width and shown unzoomed, the part beside the column counted as shown (see wide).
+const fits = () => full && root.clientWidth === full && Math.abs(visualViewport.width + COLUMN - full) <= 2;
+
 function arrange() {
   undo();
 
-  // Only a page Safari has laid out the full width is arranged for it.
-  if (!full || !document.body || Math.abs(root.clientWidth * visualViewport.scale - full) > 2) return;
-  const edge = root.clientWidth - (COLUMN + GAP) / visualViewport.scale;
+  if (!fits() || !document.body) return;
+  const edge = full - COLUMN - GAP;
   // Everything is measured before anything is written, so the page is laid out once.
   const found = { bars: [], blocks: new Map(), controls: [], rows: [] };
   walk(document.body, edge, found, { inside: false, block: null });
@@ -103,15 +111,34 @@ function arrange() {
 
   for (const [el, left, css] of bars) fit(el, left, css, edge);
 
+  // A bar held to the right (on a right-to-left page) or centered moves right as it narrows, still reaching under the
+  // column. (One parked past the screen's edge, like a closed side menu, doesn't, and stays out of sight.)
+  for (const [el, left] of bars) {
+    const r = el.getBoundingClientRect();
+
+    if (r.left > left + 0.5 && r.right > edge + 0.5) shift(el, r.right - edge);
+  }
+
   for (const el of found.rows) el.setAttribute("data-brim-row", "");
   sliding = found.rows;
 
   dodge(found.controls, edge);
   observer.takeRecords(); // Brim's own changes aren't the page's
+  home();
+}
+
+// Safari counts only the part beside the column as shown, so it lets the page slide that far sideways. A page that
+// scrolls itself there (Google's results) or opens at its right edge (right-to-left pages) is put back, once no
+// finger is on it: put back under a finger, a page that lets itself be dragged sideways shook.
+let touches = 0;
+
+function home() {
+  if (!touches && fits() && Math.abs(scrollX) > 0.5) scrollBy({ left: -scrollX, top: 0, behavior: "instant" });
 }
 
 // One pass down the page. Fixed and sticky boxes reaching the column are bars, and keep their contents beside it;
-// rows that scroll sideways bring their own items out from under it. Elsewhere each block holding text reaching
+// rows that scroll sideways at least as far as they reach under it bring their own items out (a box only a little
+// too wide, like Wikipedia's article on a right-to-left page, is no row). Elsewhere each block holding text reaching
 // past the edge stops its lines there, and controls reaching past it are moved in after.
 function walk(el, edge, found, { inside, block }) {
   const css = getComputedStyle(el);
@@ -126,17 +153,23 @@ function walk(el, edge, found, { inside, block }) {
 
   if (bar) found.bars.push(el);
 
-  if (/auto|scroll/.test(css.overflowX) && el.scrollWidth > el.clientWidth + 1) return void found.rows.push(el);
+  if (/auto|scroll/.test(css.overflowX) && el.scrollWidth > el.clientWidth + Math.max(over, 1))
+    return void found.rows.push(el);
 
-  if (over > 0 && r.width < root.clientWidth * 0.4 && (el.matches(CONTROLS) || /fixed|sticky/.test(css.position)))
-    found.controls.push(el);
+  const control =
+    over > 0 && r.width < root.clientWidth * 0.4 && (el.matches(CONTROLS) || /fixed|sticky/.test(css.position));
+
+  if (control) found.controls.push(el);
 
   // The block whose lines this element's text runs in: itself, or for inline text the block around it. Once a
-  // block's lines stop at the edge, so do those of everything inside it.
+  // block's lines stop at the edge, so do those of everything inside it. A bar, or a control that is a box of its own
+  // rather than words in a line, moves in whole and keeps its lines (Chase's "Sign in", narrowed as well as moved,
+  // broke into a letter or two a line).
   const holder = /^inline|^contents$/.test(css.display) ? block : el;
   const text = [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.data.trim());
+  const whole = bar || (control && css.display !== "inline");
 
-  if (text && holder && !inside && !bar) {
+  if (text && holder && !inside && !whole) {
     const box = getComputedStyle(holder);
 
     const by =
@@ -145,12 +178,16 @@ function walk(el, edge, found, { inside, block }) {
     if (by > 0) found.blocks.set(holder, parseFloat(box.paddingRight) + by);
   }
 
-  for (const child of el.children)
-    walk(child, edge, found, { inside: inside || bar || (text && Boolean(holder)), block: holder });
+  // Web components (Reddit's) lay out their own open shadow trees, with the page's elements placed in them.
+  for (const child of [...(el.shadowRoot?.children ?? []), ...el.children])
+    walk(child, edge, found, { inside: inside || whole || (text && Boolean(holder)), block: holder });
 }
 
+// The box around an element, across the edge of a shadow tree.
+const up = (el) => el.parentElement ?? el.parentNode?.host;
+
 function within(el, boxes) {
-  for (let e = el.parentElement; e; e = e.parentElement) if (boxes.has(e)) return true;
+  for (let e = up(el); e; e = up(e)) if (boxes.has(e)) return true;
 
   return false;
 }
@@ -209,7 +246,7 @@ function shift(el, by) {
 
 // The nearest bar-like box around a control: most of the page wide, a single line or two tall.
 function rowOf(el) {
-  for (let e = el.parentElement; e && e !== document.body; e = e.parentElement) {
+  for (let e = up(el); e && e !== document.body; e = up(e)) {
     const r = e.getBoundingClientRect();
 
     if (r.height > 200) return null;
@@ -224,7 +261,7 @@ function rowOf(el) {
 function groupOf(el) {
   let group = el;
 
-  for (let e = el.parentElement; e && e !== document.body; e = e.parentElement) {
+  for (let e = up(el); e && e !== document.body; e = up(e)) {
     const r = e.getBoundingClientRect();
 
     if (r.width > root.clientWidth * 0.5 || r.height > 120) break;
@@ -253,6 +290,21 @@ observer.observe(root, { childList: true, subtree: true, attributes: true, attri
 adopt();
 
 addEventListener("resize", widen);
+
+// Safari can settle the width it shows only after a page has started, once Brim has looked.
+visualViewport.addEventListener("resize", () => phone && wide() !== full && widen());
+
+visualViewport.addEventListener("scroll", home);
+
+for (const type of ["touchstart", "touchend", "touchcancel"])
+  addEventListener(
+    type,
+    (event) => {
+      touches = event.touches.length;
+      home();
+    },
+    { capture: true, passive: true },
+  );
 
 screen.orientation.addEventListener("change", widen);
 
