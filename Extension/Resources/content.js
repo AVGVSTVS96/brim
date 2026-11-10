@@ -27,6 +27,9 @@ let own = ""; // what the page itself asked of it
 let wrote = ""; // what Brim last put in it
 let full = 0; // the screen's width while Brim widens the page, else 0
 
+const extra = (width) => `, width=${width}, height=device-height, initial-scale=1, minimum-scale=1`;
+const EXTRA = new RegExp(extra("\\d+"), "g");
+
 // The screen's width when Safari has its column on the right, else 0. On its side with the camera on the left
 // (landscape-primary) the column is on the left, and Brim leaves the page as Safari lays it out.
 // The visible width is checked rather than the screen's, which Private Browsing reports made up.
@@ -42,7 +45,7 @@ function widen() {
   full = meta ? wide() : 0;
 
   if (meta) {
-    wrote = full ? `${own}, width=${full}, height=device-height, initial-scale=1, minimum-scale=1` : own;
+    wrote = full ? own + extra(full) : own;
 
     if (meta.content !== wrote) meta.content = wrote;
   }
@@ -54,12 +57,13 @@ function widen() {
   later(0);
 }
 
-// Pages that set their viewport tag again from script (Next.js and others do) get it widened again.
+// Pages that set their viewport tag again from script (Next.js and others do) get it widened again. Some (Amazon)
+// write back what they read, Brim's settings included, which Brim takes off again rather than adding to.
 function adopt() {
   const found = document.querySelector('meta[name="viewport"]');
 
   if (!found || (found === meta && found.content === wrote)) return;
-  own = found.content;
+  own = found.content.replace(EXTRA, "");
   meta = /device-width/.test(own) ? found : undefined;
   widen();
 }
