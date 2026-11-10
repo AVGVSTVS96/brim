@@ -38,14 +38,12 @@ const want = (tag) => own(tag) + (full ? extra(full) : "");
 
 // The screen's width when Safari has its column on the right, else 0. On its side with the camera on the left
 // (landscape-primary) the column is on the left, and Brim leaves the page as Safari lays it out.
-// The visible width is checked rather than the screen's, which Private Browsing reports made up. A page widened after
-// Safari has already fitted it to the column can keep reporting that scale (0.82) while shown unzoomed, so the visible
-// width unscaled counts too.
+// The visible width is checked rather than the screen's, which Private Browsing reports made up, and scaled, so a
+// pinch on another phone never reads as the Duo's.
 function wide() {
   if (screen.orientation.type === "landscape-primary") return 0;
-  const shown = visualViewport.width;
 
-  return SCREENS[Math.round(shown * visualViewport.scale)] ?? SCREENS[Math.round(shown)] ?? 0;
+  return SCREENS[Math.round(visualViewport.width * visualViewport.scale)] ?? 0;
 }
 
 // The viewport tag decides the layout's width before anything is laid out, and Brim's settings come last, so they
@@ -78,9 +76,9 @@ function adopt() {
 let changes = []; // [element, property, the page's own value]
 let sliding = []; // rows that scroll sideways
 
-function set(el, property, value) {
+function set(el, property, value, priority = "important") {
   changes.push([el, property, el.style.getPropertyValue(property)]);
-  el.style.setProperty(property, value, "important");
+  el.style.setProperty(property, value, priority);
 }
 
 function undo() {
@@ -113,11 +111,9 @@ function arrange() {
 
   // A bar held to the right (on a right-to-left page) or centered moves right as it narrows, still reaching under the
   // column. (One parked past the screen's edge, like a closed side menu, doesn't, and stays out of sight.)
-  for (const [el, left] of bars) {
-    const r = el.getBoundingClientRect();
+  const narrowed = bars.map(([el, left]) => [el, left, el.getBoundingClientRect()]);
 
-    if (r.left > left + 0.5 && r.right > edge + 0.5) shift(el, r.right - edge);
-  }
+  for (const [el, left, r] of narrowed) if (r.left > left + 0.5 && r.right > edge + 0.5) shift(el, r.right - edge);
 
   for (const el of found.rows) el.setAttribute("data-brim-row", "");
   sliding = found.rows;
@@ -129,16 +125,23 @@ function arrange() {
 
 // Safari counts only the part beside the column as shown, so it lets the page slide that far sideways. A page that
 // scrolls itself there (Google's results) or opens at its right edge (right-to-left pages) is put back, once no
-// finger is on it: put back under a finger, a page that lets itself be dragged sideways shook.
+// finger is on it (put back under a finger, a page that lets itself be dragged sideways shook) and nothing is being
+// typed (Safari slides the page to keep the caret in sight).
 let touches = 0;
 
 function home() {
-  if (!touches && fits() && Math.abs(scrollX) > 0.5) scrollBy({ left: -scrollX, top: 0, behavior: "instant" });
+  let focused = document.activeElement;
+
+  while (focused?.shadowRoot?.activeElement) focused = focused.shadowRoot.activeElement;
+
+  const typing = focused?.matches("input,textarea,[contenteditable]:not([contenteditable=false])");
+
+  if (!touches && !typing && fits() && Math.abs(scrollX) > 0.5)
+    scrollBy({ left: -scrollX, top: 0, behavior: "instant" });
 }
 
 // One pass down the page. Fixed and sticky boxes reaching the column are bars, and keep their contents beside it;
-// rows that scroll sideways at least as far as they reach under it bring their own items out (a box only a little
-// too wide, like Wikipedia's article on a right-to-left page, is no row). Elsewhere each block holding text reaching
+// rows that scroll sideways bring their own items out from under it. Elsewhere each block holding text reaching
 // past the edge stops its lines there, and controls reaching past it are moved in after.
 function walk(el, edge, found, { inside, block }) {
   const css = getComputedStyle(el);
@@ -153,8 +156,7 @@ function walk(el, edge, found, { inside, block }) {
 
   if (bar) found.bars.push(el);
 
-  if (/auto|scroll/.test(css.overflowX) && el.scrollWidth > el.clientWidth + Math.max(over, 1))
-    return void found.rows.push(el);
+  if (/auto|scroll/.test(css.overflowX) && el.scrollWidth > el.clientWidth + 1) return void found.rows.push(el);
 
   const control =
     over > 0 && r.width < root.clientWidth * 0.4 && (el.matches(CONTROLS) || /fixed|sticky/.test(css.position));
@@ -240,8 +242,13 @@ function dodge(controls, edge) {
   }
 }
 
+// Moves an element left on top of its own translate (Tailwind centers dialogs and icons with it), and below the
+// page's animations of it, which play as the page made them.
 function shift(el, by) {
-  set(el, "translate", `${(parseFloat(el.style.translate) || 0) - by}px`);
+  const translate = getComputedStyle(el).translate;
+  const [x, ...rest] = translate === "none" ? ["0px"] : translate.match(/calc\((?:[^()]|\([^()]*\))*\)|\S+/g);
+
+  set(el, "translate", [`calc(${x} - ${by}px)`, ...rest].join(" "), "");
 }
 
 // The nearest bar-like box around a control: most of the page wide, a single line or two tall.
