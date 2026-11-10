@@ -87,7 +87,7 @@ function arrange() {
   undo();
 
   // Only a page Safari has laid out the full width is arranged for it.
-  if (!full || Math.abs(root.clientWidth * visualViewport.scale - full) > 2) return;
+  if (!full || !document.body || Math.abs(root.clientWidth * visualViewport.scale - full) > 2) return;
   const edge = root.clientWidth - (COLUMN + GAP) / visualViewport.scale;
   // Everything is measured before anything is written, so the page is laid out once.
   const found = { bars: [], blocks: new Map(), controls: [], rows: [] };
