@@ -18,7 +18,8 @@ scripts/gui xcodebuild build-for-testing -project Brim.xcodeproj -scheme Brim -d
 # The test run leaves an older Brim in place, so the new one is installed first.
 if xcrun simctl list devices | grep -q "$1"; then xcrun simctl install "$1" build/Build/Products/Debug-iphonesimulator/Brim.app
 else xcrun devicectl device install app --device "$1" build/Build/Products/Debug-iphoneos/Brim.app >/dev/null; fi
-TEST_RUNNER_BRIM_URLS=$3 xcodebuild test-without-building -project Brim.xcodeproj -scheme Brim -destination "id=$1" \
+name=$(/usr/bin/sed -n 's/^ *APP_NAME: *//p' project.yml)
+TEST_RUNNER_BRIM_NAME=$name TEST_RUNNER_BRIM_URLS=$3 xcodebuild test-without-building -project Brim.xcodeproj -scheme Brim -destination "id=$1" \
   -derivedDataPath build -resultBundlePath build/check.xcresult $(for t in $(echo "$2" | tr , " "); do echo -only-testing:Checks/Checks/test$t; done) -quiet 2>&1 |
   grep -E "error:|failed|TEST" | cut -c1-200 | tail -15 || true
 xcrun xcresulttool export attachments --path build/check.xcresult --output-path build/shots >/dev/null

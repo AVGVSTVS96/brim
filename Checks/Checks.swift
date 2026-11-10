@@ -11,7 +11,7 @@ final class Checks: XCTestCase {
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         XCUIApplication().launch() // Safari lists an app's extension once the app has run
         settings.launch()
-        for label in ["Apps", "Safari", "Extensions", "Brim"] {
+        for label in ["Apps", "Safari", "Extensions", ProcessInfo.processInfo.environment["BRIM_NAME"] ?? "Span"] {
             open(settings, label)
         }
         // On the Duo's front screen Settings keeps its sidebar, with Airplane Mode's switch, beside the page.
