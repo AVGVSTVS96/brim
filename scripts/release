@@ -1,0 +1,35 @@
+#!/bin/sh
+# Archives a Release build on the Mac (`ssh mac`) and exports it for the App Store as build/export/Brim.ipa there, then
+# has Apple validate it. `scripts/release upload` sends it to App Store Connect instead, once the app's record exists.
+# Signing goes through the App Store Connect API key in ~/.appstoreconnect on the Mac (env, private_keys/).
+set -e
+cd "$(dirname "$0")/.."
+destination=${1:-export}
+case $destination in export | upload) ;; *) echo "usage: scripts/release [upload]" >&2 && exit 1 ;; esac
+rsync -a --delete --exclude .git --exclude build --exclude shots --exclude node_modules ./ mac:Developer/brim-build/
+ssh mac sh -s "$destination" <<'MAC'
+set -e
+cd ~/Developer/brim-build
+. ~/.appstoreconnect/env
+auth="-allowProvisioningUpdates -authenticationKeyPath $HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+  -authenticationKeyID $ASC_KEY_ID -authenticationKeyIssuerID $ASC_ISSUER_ID"
+echo "build $(scripts/version)"
+rm -rf build/Brim.xcarchive build/export
+scripts/gui xcodebuild archive -project Brim.xcodeproj -scheme Brim -configuration Release -destination generic/platform=iOS \
+  -archivePath build/Brim.xcarchive -derivedDataPath build $auth -quiet
+cat > build/export.plist <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>method</key><string>app-store-connect</string>
+<key>destination</key><string>$1</string>
+<key>teamID</key><string>$(/usr/bin/sed -n 's/^ *DEVELOPMENT_TEAM: *//p' project.yml)</string>
+<key>signingStyle</key><string>automatic</string>
+<key>manageAppVersionAndBuildNumber</key><false/>
+</dict></plist>
+PLIST
+scripts/gui xcodebuild -exportArchive -archivePath build/Brim.xcarchive -exportPath build/export \
+  -exportOptionsPlist build/export.plist $auth -quiet
+[ "$1" = upload ] || xcrun altool --validate-app -f build/export/Brim.ipa -t ios --apiKey "$ASC_KEY_ID" \
+  --apiIssuer "$ASC_ISSUER_ID" --output-format normal
+MAC

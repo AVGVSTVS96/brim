@@ -1,9 +1,9 @@
-# Brim
+# Span
 
 A Safari extension that lays web pages out across the whole front screen of the iPhone Duo.
 
 On the front screen, Safari keeps its buttons in a glass column on the right and lays pages out beside it: 382 points
-of the screen's 466. Brim lays them out the full 466, so pictures, cards, grids and colored bars use the whole screen,
+of the screen's 466. Span lays them out the full 466, so pictures, cards, grids and colored bars use the whole screen,
 and keeps everything you read or tap clear of the buttons.
 
 ## What it does
@@ -18,16 +18,16 @@ and keeps everything you read or tap clear of the buttons.
   so their close and accept buttons stay reachable.
 - **No sideways sliding.** The page only scrolls up and down; rows of cards still scroll sideways and can be brought
   out from under the column.
-- **Private Browsing works.** Brim checks the width Safari shows, not the screen size, which Private Browsing makes up.
+- **Private Browsing works.** Span checks the width Safari shows, not the screen size, which Private Browsing makes up.
 - **Nothing to configure.** It changes nothing on other iPhones, the iPad, the Mac, or the Duo's unfolded screen.
 
 ## Install
 
-1. Build it from this repo with Xcode 27 and [XcodeGen](https://github.com/yonaskolb/XcodeGen): set
-   `DEVELOPMENT_TEAM` and the bundle IDs in `project.yml` to yours, run `xcodegen generate`, and run the Brim app on
-   your Duo.
-2. In **Settings › Apps › Safari › Extensions › Brim**, turn on **Allow Extension** and set **All Websites** to
-   **Allow**.
+1. Install Span on your iPhone Duo and open it.
+2. Tap **Open Settings**, turn on **Allow Extension** and set **All Websites** to **Allow**.
+
+To build it yourself, use Xcode 27 and [XcodeGen](https://github.com/yonaskolb/XcodeGen): set `DEVELOPMENT_TEAM` and
+the bundle IDs in `project.yml` to yours, run `xcodegen generate`, and run the Brim scheme on your Duo.
 
 ## How it works
 
@@ -37,14 +37,27 @@ the column, a maximum width (plus a matching shadow, so the color continues) on 
 `touch-action` so a sideways drag can't slide the page. It runs again when the page changes. Pages that aren't laid
 out for phones (no `width=device-width`) are left alone.
 
-## Checks
+## Scripts
 
-`scripts/check <device> Pages <url>…` opens pages in Safari on a Duo or a Duo simulator, drags each sideways, and
-copies screenshots to `shots/`. `scripts/phone` builds and installs the app on a connected iPhone.
+They build on a Mac reached as `ssh mac`, with Xcode and the signing team.
+
+- `scripts/phone [device]` builds and installs the app on an iPhone the Mac reaches.
+- `scripts/check <device> Pages <url>…` opens pages in Safari on a Duo or a Duo simulator, drags each sideways, and
+  copies screenshots to `shots/`.
+- `scripts/release` archives a Release build and exports a signed, App Store–ready `Brim.ipa`; `scripts/release upload`
+  sends it to App Store Connect.
+
+The name shown on the Home Screen, in Settings and in Safari comes from `APP_NAME` in `project.yml`; the version from
+`MARKETING_VERSION`, with a new build number on every build (`scripts/version`), since Safari only reloads an
+extension's scripts when its version changes.
+
+## Privacy
+
+Span collects nothing and makes no network requests: [privacy](docs/privacy.md).
 
 ## Known limits
 
-- On its side with the camera on the left, Safari puts the column on the left; Brim leaves those pages as Safari lays
+- On its side with the camera on the left, Safari puts the column on the left; Span leaves those pages as Safari lays
   them out.
 - A drag that starts inside an embedded frame from another site can still slide the page.
 - Fixed boxes are measured when the page loads and changes, so one a page animates in can sit under the column until
