@@ -1,14 +1,15 @@
 #!/bin/sh
 # Opens pages in Safari on an iPhone Duo with Brim and copies a screenshot of each here, to shots/ (Checks/Checks.swift).
 # Usage: scripts/check <device> [tests] [url...]   device: a simulator or iPhone UDID the Mac reaches; tests: Allow, Pages
-# or both (Allow,Pages), run in one go so a phone asks for Touch ID once
+# or both (Allow,Pages), run in one go so a phone asks for Touch ID once. BRIM_SPLIT=left or right opens the pages in
+# Split View on that side of an open Duo's screen.
 set -e
 cd "$(dirname "$0")/.."
 device=$1 test=${2:-Pages}
 shift 2 || shift $#
 rsync -a --delete --exclude .git --exclude build --exclude shots --exclude node_modules ./ mac:Developer/brim-build/
 urls=$(echo "$*" | tr " " ",")
-ssh mac sh -s "$device" "$test" "'$urls'" <<'MAC'
+ssh mac sh -s "$device" "$test" "'$urls'" "${BRIM_SPLIT:-}" <<'MAC'
 set -e
 cd ~/Developer/brim-build
 scripts/version >/dev/null
@@ -19,7 +20,7 @@ scripts/gui xcodebuild build-for-testing -project Brim.xcodeproj -scheme Brim -d
 if xcrun simctl list devices | grep -q "$1"; then xcrun simctl install "$1" build/Build/Products/Debug-iphonesimulator/Brim.app
 else xcrun devicectl device install app --device "$1" build/Build/Products/Debug-iphoneos/Brim.app >/dev/null; fi
 name=$(/usr/bin/sed -n 's/^ *APP_NAME: *//p' project.yml)
-TEST_RUNNER_BRIM_NAME=$name TEST_RUNNER_BRIM_URLS=$3 xcodebuild test-without-building -project Brim.xcodeproj -scheme Brim -destination "id=$1" \
+TEST_RUNNER_BRIM_NAME=$name TEST_RUNNER_BRIM_URLS=$3 TEST_RUNNER_BRIM_SPLIT=$4 xcodebuild test-without-building -project Brim.xcodeproj -scheme Brim -destination "id=$1" \
   -derivedDataPath build -resultBundlePath build/check.xcresult $(for t in $(echo "$2" | tr , " "); do echo -only-testing:Checks/Checks/test$t; done) -quiet 2>&1 |
   grep -E "error:|failed|TEST" | cut -c1-200 | tail -15 || true
 xcrun xcresulttool export attachments --path build/check.xcresult --output-path build/shots >/dev/null

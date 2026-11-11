@@ -41,7 +41,7 @@ final class Checks: XCTestCase {
     func testPages() throws {
         let urls = (ProcessInfo.processInfo.environment["BRIM_URLS"] ?? "https://www.amazon.com").split(separator: ",")
         safari.terminate() // Safari loads an extension's new version when it starts
-        safari.launch()
+        if let split { splitView(split) } else { safari.launch() }
         for (index, url) in urls.enumerated() {
             safari.open(URL(string: String(url))!)
             sleep(8)
@@ -57,8 +57,32 @@ final class Checks: XCTestCase {
         }
     }
 
+    // BRIM_SPLIT (left or right) puts Safari on that side of the open Duo's screen in Split View, beside Messages:
+    // the app whose Home Screen menu opens Split View takes the left, and the one tapped after it the right. The Duo
+    // has to be open and upright already.
+    let split = ProcessInfo.processInfo.environment["BRIM_SPLIT"].flatMap { $0.isEmpty ? nil : $0 }
+
+    private func splitView(_ side: String) {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let (first, second) = side == "left" ? ("Safari", "Messages") : ("Messages", "Safari")
+        XCUIApplication(bundleIdentifier: "com.apple.MobileSMS").terminate() // ends the last run's pair
+        XCUIDevice.shared.press(.home)
+        XCUIDevice.shared.press(.home)
+        sleep(1)
+        springboard.icons[first].press(forDuration: 1)
+        springboard.buttons["Open in Split View"].tap()
+        sleep(2)
+        springboard.icons[second].tap()
+        sleep(3)
+        // Safari's offer of dark mode for every site covers the page's top.
+        let notNow = safari.buttons["Not Now"]
+        if notNow.exists { notNow.tap() }
+    }
+
     private func attach(_ app: XCUIApplication, _ name: String) {
-        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        // The open Duo's screen isn't the main one.
+        let screen = split == nil ? XCUIScreen.main : XCUIScreen.screens.last { $0 != XCUIScreen.main } ?? XCUIScreen.main
+        let shot = XCTAttachment(screenshot: screen.screenshot())
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)

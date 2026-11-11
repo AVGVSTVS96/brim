@@ -46,7 +46,8 @@ They build on a Mac reached as `ssh mac`, with Xcode and the signing team.
   [hangar](https://github.com/AVGVSTVS96/hangar), which installs it on a tap from any network. Each build registers the
   URL scheme `com.shahidy.brim-<build>` (`App/Info.plist`), which tells hangar that build is installed.
 - `scripts/check <device> Pages <url>…` opens pages in Safari on a Duo or a Duo simulator, drags each sideways, and
-  copies screenshots to `shots/`.
+  copies screenshots to `shots/`. With `BRIM_SPLIT=left` or `right` it opens them in Split View on that side of the
+  open Duo's screen.
 - `scripts/release` archives a Release build and exports a signed, App Store–ready `Brim.ipa`; `scripts/release upload`
   sends it to App Store Connect.
 
