@@ -2,7 +2,8 @@
 // it: 382 points of the screen's 466 (594 of 678 on its side). Brim lays pages out the full width, so pictures,
 // cards, grids and bars use the whole screen, and keeps what you read or tap clear of the buttons: running text
 // wraps at the column, links and buttons there move in beside it, and fixed bars and pop-ups keep their contents
-// beside it while their color runs on underneath.
+// beside it while their color runs on underneath. On its side with the camera on the left the column is on the
+// left, and Brim does the same, mirrored.
 const COLUMN = 84; // points Safari keeps for its buttons
 const GAP = 6; // points between the buttons and what you read or tap
 const SCREENS = { 382: 466, 594: 678 }; // the width Safari gives the page → the screen's
@@ -27,6 +28,7 @@ html[data-brim]::-webkit-scrollbar:horizontal{display:none}`;
 let tags = []; // the page's viewport tags
 let phone = false; // the page is laid out for phones (device-width)
 let full = 0; // the screen's width while Brim widens the page, else 0
+let left = false; // Safari's column is on the left
 
 const extra = (width) => `, width=${width}, height=device-height, initial-scale=1, minimum-scale=1`;
 const EXTRA = new RegExp(extra("\\d+"), "g");
@@ -36,13 +38,10 @@ const EXTRA = new RegExp(extra("\\d+"), "g");
 const own = (tag) => tag.content.replace(EXTRA, "");
 const want = (tag) => own(tag) + (full ? extra(full) : "");
 
-// The screen's width when Safari has its column on the right, else 0. On its side with the camera on the left
-// (landscape-primary) the column is on the left, and Brim leaves the page as Safari lays it out.
-// The visible width is checked rather than the screen's, which Private Browsing reports made up, and scaled, so a
-// pinch on another phone never reads as the Duo's.
+// The screen's width when Safari has its column beside the page, else 0. The visible width is checked rather than
+// the screen's, which Private Browsing reports made up, and scaled, so a pinch on another phone never reads as the
+// Duo's.
 function wide() {
-  if (screen.orientation.type === "landscape-primary") return 0;
-
   return SCREENS[Math.round(visualViewport.width * visualViewport.scale)] ?? 0;
 }
 
@@ -50,6 +49,7 @@ function wide() {
 // win over the page's own.
 function widen() {
   full = phone ? wide() : 0;
+  left = screen.orientation.type === "landscape-primary"; // on its side with the camera on the left
 
   for (const tag of tags) if (tag.content !== want(tag)) tag.content = want(tag);
 
@@ -94,26 +94,40 @@ function undo() {
 // The page is laid out the full width and shown unzoomed, the part beside the column counted as shown (see wide).
 const fits = () => full && root.clientWidth === full && Math.abs(visualViewport.width + COLUMN - full) <= 2;
 
+// Where an element sits on the screen, mirrored when the column is on the left, so everything below is worked out
+// as if the column were on the right; the page sits where home puts it.
+function box(el) {
+  const r = el.getBoundingClientRect();
+  const x = left ? full - COLUMN - r.right : r.left;
+
+  return { left: x, right: x + r.width, width: r.width, height: r.height };
+}
+
+// The side of a box toward the column, as CSS names it.
+const near = () => (left ? "left" : "right");
+
 function arrange() {
   undo();
 
   if (!fits() || !document.body) return;
+  home();
   const edge = full - COLUMN - GAP;
   // Everything is measured before anything is written, so the page is laid out once.
   const found = { bars: [], blocks: new Map(), controls: [], rows: [] };
   walk(document.body, edge, found, { inside: false, block: null });
 
-  const bars = found.bars.map((el) => [el, el.getBoundingClientRect().left, getComputedStyle(el)]);
+  const bars = found.bars.map((el) => [el, box(el).left, getComputedStyle(el)]);
 
-  for (const [el, padding] of found.blocks) if (!within(el, found.blocks)) set(el, "padding-right", `${padding}px`);
+  for (const [el, padding] of found.blocks) if (!within(el, found.blocks)) set(el, `padding-${near()}`, `${padding}px`);
 
-  for (const [el, left, css] of bars) fit(el, left, css, edge);
+  for (const [el, from, css] of bars) fit(el, from, css, edge);
 
-  // A bar held to the right (on a right-to-left page) or centered moves right as it narrows, still reaching under the
-  // column. (One parked past the screen's edge, like a closed side menu, doesn't, and stays out of sight.)
-  const narrowed = bars.map(([el, left]) => [el, left, el.getBoundingClientRect()]);
+  // A bar held to the column's side (the right on a right-to-left page, the left on most when the column is there) or
+  // centered moves toward the column as it narrows, still reaching under it. (One parked past the screen's edge, like
+  // a closed side menu, doesn't, and stays out of sight.)
+  const narrowed = bars.map(([el, from]) => [el, from, box(el)]);
 
-  for (const [el, left, r] of narrowed) if (r.left > left + 0.5 && r.right > edge + 0.5) shift(el, r.right - edge);
+  for (const [el, from, r] of narrowed) if (r.left > from + 0.5 && r.right > edge + 0.5) shift(el, r.right - edge);
 
   for (const el of found.rows) el.setAttribute("data-brim-row", "");
   sliding = found.rows;
@@ -123,10 +137,12 @@ function arrange() {
   home();
 }
 
-// Safari counts only the part beside the column as shown, so it lets the page slide that far sideways. A page that
-// scrolls itself there (Google's results) or opens at its right edge (right-to-left pages) is put back, once no
-// finger is on it (put back under a finger, a page that lets itself be dragged sideways shook) and nothing is being
-// typed (Safari slides the page to keep the caret in sight).
+// Safari counts only the part beside the column as shown, so it lets the page slide that far sideways. The page
+// rests with its edge at the screen's: scrolled to its start when the column is on the right, and the column's
+// width in when it's on the left, where Safari starts the page beside the column. A page that scrolls itself away
+// (Google's results) or opens at its other edge (right-to-left pages) is put back, once no finger is on it (put
+// back under a finger, a page that lets itself be dragged sideways shook) and nothing is being typed (Safari slides
+// the page to keep the caret in sight).
 let touches = 0;
 
 function home() {
@@ -136,8 +152,10 @@ function home() {
 
   const typing = focused?.matches("input,textarea,[contenteditable]:not([contenteditable=false])");
 
-  if (!touches && !typing && fits() && Math.abs(scrollX) > 0.5)
-    scrollBy({ left: -scrollX, top: 0, behavior: "instant" });
+  const rest = left ? COLUMN : 0;
+
+  if (!touches && !typing && fits() && Math.abs(scrollX - rest) > 0.5)
+    scrollBy({ left: rest - scrollX, top: 0, behavior: "instant" });
 }
 
 // One pass down the page. Fixed and sticky boxes reaching the column are bars, and keep their contents beside it;
@@ -147,7 +165,7 @@ function walk(el, edge, found, { inside, block }) {
   const css = getComputedStyle(el);
 
   if (css.display === "none") return;
-  const r = el.getBoundingClientRect();
+  const r = box(el);
   const over = r.right - edge;
 
   // A frame lays out its own page, so it's fitted like a bar: a sign-in or consent dialog then fits beside the column.
@@ -172,12 +190,11 @@ function walk(el, edge, found, { inside, block }) {
   const whole = bar || (control && css.display !== "inline");
 
   if (text && holder && !inside && !whole) {
-    const box = getComputedStyle(holder);
+    const sides = getComputedStyle(holder);
+    const padding = parseFloat(sides.getPropertyValue(`padding-${near()}`));
+    const by = box(holder).right - parseFloat(sides.getPropertyValue(`border-${near()}-width`)) - padding - edge;
 
-    const by =
-      holder.getBoundingClientRect().right - parseFloat(box.borderRightWidth) - parseFloat(box.paddingRight) - edge;
-
-    if (by > 0) found.blocks.set(holder, parseFloat(box.paddingRight) + by);
+    if (by > 0) found.blocks.set(holder, padding + by);
   }
 
   // Web components (Reddit's) lay out their own open shadow trees, with the page's elements placed in them.
@@ -196,18 +213,19 @@ function within(el, boxes) {
 
 // A bar, or a row of controls, ends at the column's edge, so what it holds (centered, right-aligned or positioned
 // in it) moves in with it, and its color carries on to the screen's edge underneath the column.
-function fit(el, left, css, edge) {
+function fit(el, from, css, edge) {
   set(el, "box-sizing", "border-box");
-  set(el, "max-width", `${edge - left}px`);
+  set(el, "max-width", `${edge - from}px`);
 
   if (css.position === "static") set(el, "position", "relative");
   const fill = color(css);
+  const reach = root.clientWidth - edge;
 
   if (fill)
     set(
       el,
       "box-shadow",
-      `${css.boxShadow === "none" ? "" : `${css.boxShadow},`}${root.clientWidth - edge}px 0 0 ${fill}`,
+      `${css.boxShadow === "none" ? "" : `${css.boxShadow},`}${left ? -reach : reach}px 0 0 ${fill}`,
     );
 }
 
@@ -220,21 +238,21 @@ function color(css) {
 // Controls still reaching under the column move in: the row each sits in ends at the edge (see fit), and one in no
 // row, or that its row doesn't bring in, moves with the small group around it.
 function dodge(controls, edge) {
-  const over = controls.filter((el) => el.getBoundingClientRect().right > edge + 0.5);
+  const over = controls.filter((el) => box(el).right > edge + 0.5);
   const rows = new Map();
 
   for (const el of over) {
     const row = rowOf(el);
 
-    if (row && !rows.has(row)) rows.set(row, [row.getBoundingClientRect().left, getComputedStyle(row)]);
+    if (row && !rows.has(row)) rows.set(row, [box(row).left, getComputedStyle(row)]);
   }
 
-  for (const [row, [left, css]] of rows) fit(row, left, css, edge);
+  for (const [row, [from, css]] of rows) fit(row, from, css, edge);
 
   const moved = new Set();
 
   for (const el of over) {
-    const by = el.getBoundingClientRect().right - edge;
+    const by = box(el).right - edge;
     const group = groupOf(el);
 
     if (by > 0.5 && !moved.has(group)) shift(group, by);
@@ -242,13 +260,13 @@ function dodge(controls, edge) {
   }
 }
 
-// Moves an element left on top of its own translate (Tailwind centers dialogs and icons with it), and below the
-// page's animations of it, which play as the page made them.
+// Moves an element away from the column on top of its own translate (Tailwind centers dialogs and icons with it), and
+// below the page's animations of it, which play as the page made them.
 function shift(el, by) {
   const translate = getComputedStyle(el).translate;
   const [x, ...rest] = translate === "none" ? ["0px"] : translate.match(/calc\((?:[^()]|\([^()]*\))*\)|\S+/g);
 
-  set(el, "translate", [`calc(${x} - ${by}px)`, ...rest].join(" "), "");
+  set(el, "translate", [`calc(${x} ${left ? "+" : "-"} ${by}px)`, ...rest].join(" "), "");
 }
 
 // The nearest bar-like box around a control: most of the page wide, a single line or two tall.
