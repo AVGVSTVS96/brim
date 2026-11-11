@@ -23,7 +23,7 @@ scripts/gui "$HOME/.local/bin/turn" xcodebuild build -project Brim.xcodeproj -sc
   -configuration Release -derivedDataPath build -allowProvisioningUpdates -quiet >&2
 mkdir Payload
 cp -R build/Build/Products/Release-iphoneos/Brim.app Payload/
-ditto -c -k --keepParent Payload Span.ipa
+ditto -c -k --norsrc --noextattr --keepParent Payload Span.ipa
 echo "$build"
 MAC
 )
