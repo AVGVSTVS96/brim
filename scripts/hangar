@@ -1,0 +1,35 @@
+#!/bin/sh
+# Builds GitHub's main on the Mac (`ssh mac`) for the team's development devices and puts it in hangar, the app on
+# Bassim's iPhone that installs his development apps when he taps, from any network (~/Developer/hangar on this box).
+# The build registers the URL scheme com.shahidy.brim-<build> (App/Info.plist), which hangar opens to know that build
+# is installed and to bring Span back up. Notes default to main's last commit.
+# Usage: scripts/hangar [--notes '<one line on what changed>']
+set -e
+cd "$(dirname "$0")/.."
+case $1 in
+  ('') notes= ;;
+  (--notes) notes=$2 ;;
+  (*) echo "usage: scripts/hangar [--notes '<one line on what changed>']" >&2; exit 2 ;;
+esac
+git fetch -q origin main
+notes=${notes:-$(git log -1 --format=%s origin/main)}
+ssh mac 'rm -rf Developer/brim-hangar && mkdir -p Developer/brim-hangar'
+git archive origin/main | ssh mac tar -x -C Developer/brim-hangar
+build=$(ssh mac sh <<'MAC'
+set -e
+cd ~/Developer/brim-hangar
+build=$(scripts/version)
+scripts/gui "$HOME/.local/bin/turn" xcodebuild build -project Brim.xcodeproj -scheme Brim -destination generic/platform=iOS \
+  -configuration Release -derivedDataPath build -allowProvisioningUpdates -quiet >&2
+mkdir Payload
+cp -R build/Build/Products/Release-iphoneos/Brim.app Payload/
+ditto -c -k --keepParent Payload Span.ipa
+echo "$build"
+MAC
+)
+dir=$HOME/.local/share/brim/hangar
+mkdir -p "$dir"
+scp -q mac:Developer/brim-hangar/Span.ipa "$dir/Span-$build.ipa"
+find "$dir" -name 'Span-*.ipa' ! -name "Span-$build.ipa" -delete
+"$HOME/Developer/hangar/bin/hangar" put "$dir/Span-$build.ipa" --notes "$notes"
+echo "Span build $build (main $(git rev-parse --short origin/main)) is in hangar"
