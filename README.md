@@ -42,6 +42,9 @@ out for phones (no `width=device-width`) are left alone.
 They build on a Mac reached as `ssh mac`, with Xcode and the signing team.
 
 - `scripts/phone [device]` builds and installs the app on an iPhone the Mac reaches.
+- `scripts/hangar [--notes '<what changed>']` builds main for development and puts it in
+  [hangar](https://github.com/AVGVSTVS96/hangar), which installs it on a tap from any network. Each build registers the
+  URL scheme `com.shahidy.brim-<build>` (`App/Info.plist`), which tells hangar that build is installed.
 - `scripts/check <device> Pages <url>…` opens pages in Safari on a Duo or a Duo simulator, drags each sideways, and
   copies screenshots to `shots/`.
 - `scripts/release` archives a Release build and exports a signed, App Store–ready `Brim.ipa`; `scripts/release upload`
